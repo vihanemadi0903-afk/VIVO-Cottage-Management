@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# PyCharm
+.idea/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Build
+build/
+dist/
+
+# Inno Setup output
+installer/*.exe
+
+# User data
+data/vivo.db
+data/settings.json
+data/Documents/
+data/Backups/
+data/Settings/
+
+# Backup files
+backups/
+*.db
+
+# OS
+Thumbs.db
+.DS_Store

@@ -1,0 +1,15 @@
+import os
+import sys
+
+
+def resource_path(relative_path):
+    """
+    مسیر صحیح فایل‌ها در حالت توسعه و فایل EXE
+    """
+
+    if hasattr(sys, "_MEIPASS"):
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
