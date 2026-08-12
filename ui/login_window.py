@@ -1,44 +1,60 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QIcon, QPixmap
-from ui.main_window import MainWindow
 from PySide6.QtWidgets import (
     QWidget,
     QLabel,
     QVBoxLayout,
     QLineEdit,
-    QPushButton,
     QMessageBox,
 )
+
+from ui.main_window import MainWindow
+from ui.widgets.action_buttons import AnimatedButton
 from core.resource_path import resource_path
 
 
-
 class LoginWindow(QWidget):
+
     def __init__(self):
         super().__init__()
 
         self.main_window = None
 
         self.setWindowTitle("برنامه مدیریتی VIVO")
+
         self.setWindowIcon(
             QIcon(
                 resource_path("assets/icons/logo.ico")
             )
         )
+
         self.setFixedSize(420, 500)
 
         self.build_ui()
 
     def build_ui(self):
+
         layout = QVBoxLayout(self)
 
-        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setContentsMargins(
+            40,
+            40,
+            40,
+            40
+        )
+
         layout.setSpacing(20)
+
+        # -----------------------------
+        # لوگو
+        # -----------------------------
 
         logo = QLabel()
 
         pixmap = QPixmap(
-            resource_path("assets/icons/logo.png")
+            resource_path(
+                "assets/icons/logo.png"
+            )
         )
 
         logo.setPixmap(
@@ -50,42 +66,122 @@ class LoginWindow(QWidget):
             )
         )
 
-        logo.setAlignment(Qt.AlignCenter)
+        logo.setAlignment(
+            Qt.AlignCenter
+        )
+
+        # -----------------------------
+        # عنوان
+        # -----------------------------
 
         title = QLabel("VIVO")
-        title.setAlignment(Qt.AlignCenter)
-        title.setFont(QFont("Arial", 26, QFont.Bold))
 
-        subtitle = QLabel("برنامه مدیریتی VIVO")
-        subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setFont(QFont("Tahoma", 14))
+        title.setAlignment(
+            Qt.AlignCenter
+        )
 
-        password_label = QLabel("رمز عبور")
+        title.setFont(
+            QFont(
+                "Arial",
+                26,
+                QFont.Bold
+            )
+        )
+
+        # -----------------------------
+        # زیرعنوان
+        # -----------------------------
+
+        subtitle = QLabel(
+            "برنامه مدیریتی VIVO"
+        )
+
+        subtitle.setAlignment(
+            Qt.AlignCenter
+        )
+
+        subtitle.setFont(
+            QFont(
+                "Tahoma",
+                14
+            )
+        )
+
+        # -----------------------------
+        # برچسب رمز عبور
+        # -----------------------------
+
+        password_label = QLabel(
+            "رمز عبور"
+        )
+
+        # -----------------------------
+        # ورودی رمز
+        # -----------------------------
 
         self.password = QLineEdit()
-        self.password.setEchoMode(QLineEdit.Password)
-        self.password.setPlaceholderText("رمز عبور را وارد کنید")
 
-        login_btn = QPushButton("ورود")
-        login_btn.setFixedHeight(45)
+        self.password.setEchoMode(
+            QLineEdit.Password
+        )
 
-        login_btn.clicked.connect(self.login)
+        self.password.setPlaceholderText(
+            "رمز عبور را وارد کنید"
+        )
+
+        # -----------------------------
+        # دکمه ورود
+        # -----------------------------
+
+        login_btn = AnimatedButton(
+            "ورود"
+        )
+
+        login_btn.setFixedHeight(
+            45
+        )
+
+        login_btn.clicked.connect(
+            self.login
+        )
+
+        # -----------------------------
+        # قرار دادن در Layout
+        # -----------------------------
 
         layout.addStretch()
 
-        layout.addWidget(logo)
+        layout.addWidget(
+            logo
+        )
 
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
+        layout.addWidget(
+            title
+        )
 
-        layout.addSpacing(30)
+        layout.addWidget(
+            subtitle
+        )
 
-        layout.addWidget(password_label)
-        layout.addWidget(self.password)
+        layout.addSpacing(
+            30
+        )
 
-        layout.addSpacing(20)
+        layout.addWidget(
+            password_label
+        )
 
-        layout.addWidget(login_btn)
+        layout.addWidget(
+            self.password
+        )
+
+        layout.addSpacing(
+            20
+        )
+
+        layout.addWidget(
+            login_btn
+        )
 
         layout.addStretch()
 
@@ -98,9 +194,11 @@ class LoginWindow(QWidget):
                 "خطا",
                 "رمز عبور اشتباه است."
             )
+
             return
 
         self.main_window = MainWindow()
+
         self.main_window.show()
 
         self.close()
