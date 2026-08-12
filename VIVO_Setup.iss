@@ -1,5 +1,5 @@
 #define MyAppName "VIVO"
-#define MyAppVersion "2.0.1"
+#define MyAppVersion "3.0.2"
 #define MyAppPublisher "VIVO"
 #define MyAppExeName "VIVO.exe"
 
@@ -14,7 +14,7 @@ DefaultDirName={autopf}\VIVO
 DefaultGroupName=VIVO
 
 OutputDir=installer
-OutputBaseFilename=VIVO_Setup_2.0.1
+OutputBaseFilename=VIVO_Setup_3.0.2
 
 Compression=lzma
 SolidCompression=yes

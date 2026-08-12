@@ -8,7 +8,8 @@ from PySide6.QtCore import (
 from PySide6.QtWidgets import (
     QWidget,
     QHBoxLayout,
-    QPushButton
+    QPushButton,
+    QGraphicsDropShadowEffect
 )
 
 
@@ -22,7 +23,22 @@ class AnimatedButton(QPushButton):
 
         self._normal_pos = QPoint()
 
+        # -----------------------------
+        # سایه‌ی سه‌بعدی
+        # -----------------------------
+
+        self._shadow = QGraphicsDropShadowEffect(self)
+
+        self._shadow.setBlurRadius(14)
+        self._shadow.setOffset(0, 4)
+        self._shadow.setColor(Qt.black)
+
+        self.setGraphicsEffect(self._shadow)
+
+        # -----------------------------
         # انیمیشن حرکت
+        # -----------------------------
+
         self._animation = QPropertyAnimation(
             self,
             b"pos",
@@ -34,12 +50,20 @@ class AnimatedButton(QPushButton):
             QEasingCurve.OutCubic
         )
 
+        # -----------------------------
+        # ظاهر دکمه
+        # -----------------------------
+
         self.setStyleSheet("""
             QPushButton {
                 background-color: rgb(43, 43, 43);
                 color: white;
 
-                border: 1px solid rgb(65, 65, 65);
+                border-top: 1px solid rgb(85, 85, 85);
+                border-left: 1px solid rgb(70, 70, 70);
+                border-right: 1px solid rgb(25, 25, 25);
+                border-bottom: 2px solid rgb(20, 20, 20);
+
                 border-radius: 10px;
 
                 padding: 8px 16px;
@@ -50,25 +74,46 @@ class AnimatedButton(QPushButton):
 
             QPushButton:hover {
                 background-color: rgb(43, 43, 43);
-                border: 1px solid rgb(85, 85, 85);
+
+                border-top: 1px solid rgb(105, 105, 105);
+                border-left: 1px solid rgb(80, 80, 80);
+                border-right: 1px solid rgb(25, 25, 25);
+                border-bottom: 2px solid rgb(15, 15, 15);
             }
 
             QPushButton:pressed {
                 background-color: rgb(43, 43, 43);
+
+                border-top: 2px solid rgb(20, 20, 20);
+                border-left: 1px solid rgb(35, 35, 35);
+                border-right: 1px solid rgb(35, 35, 35);
+                border-bottom: 1px solid rgb(65, 65, 65);
             }
 
             QPushButton:disabled {
                 background-color: rgb(43, 43, 43);
                 color: rgb(120, 120, 120);
-                border-color: rgb(55, 55, 55);
+
+                border-top: 1px solid rgb(55, 55, 55);
+                border-left: 1px solid rgb(50, 50, 50);
+                border-right: 1px solid rgb(40, 40, 40);
+                border-bottom: 1px solid rgb(35, 35, 35);
             }
         """)
+
+    # -----------------------------
+    # ذخیره موقعیت اولیه
+    # -----------------------------
 
     def showEvent(self, event):
         super().showEvent(event)
 
         if self._normal_pos.isNull():
             self._normal_pos = self.pos()
+
+    # -----------------------------
+    # فشرده شدن
+    # -----------------------------
 
     def mousePressEvent(self, event):
 
@@ -83,7 +128,8 @@ class AnimatedButton(QPushButton):
 
             self._animation.stop()
 
-            self._animation.setDuration(90)
+            self._animation.setDuration(100)
+
             self._animation.setEasingCurve(
                 QEasingCurve.OutCubic
             )
@@ -98,7 +144,15 @@ class AnimatedButton(QPushButton):
 
             self._animation.start()
 
+            # کاهش سایه هنگام فشردن
+            self._shadow.setBlurRadius(7)
+            self._shadow.setOffset(0, 1)
+
         super().mousePressEvent(event)
+
+    # -----------------------------
+    # برگشت نرم
+    # -----------------------------
 
     def mouseReleaseEvent(self, event):
 
@@ -106,7 +160,8 @@ class AnimatedButton(QPushButton):
 
         self._animation.stop()
 
-        self._animation.setDuration(160)
+        self._animation.setDuration(190)
+
         self._animation.setEasingCurve(
             QEasingCurve.OutBack
         )
@@ -121,6 +176,10 @@ class AnimatedButton(QPushButton):
 
         self._animation.start()
 
+        # بازگرداندن سایه
+        self._shadow.setBlurRadius(14)
+        self._shadow.setOffset(0, 4)
+
 
 class ActionButtons(QWidget):
 
@@ -129,14 +188,23 @@ class ActionButtons(QWidget):
 
         layout = QHBoxLayout(self)
 
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(
+            0, 0, 0, 0
+        )
+
         layout.setSpacing(10)
 
-        self.add_btn = AnimatedButton("➕ ثبت")
+        self.add_btn = AnimatedButton(
+            "➕ ثبت"
+        )
 
-        self.edit_btn = AnimatedButton("✏ ویرایش")
+        self.edit_btn = AnimatedButton(
+            "✏ ویرایش"
+        )
 
-        self.delete_btn = AnimatedButton("🗑 حذف")
+        self.delete_btn = AnimatedButton(
+            "🗑 حذف"
+        )
 
         self.cottage_btn = AnimatedButton(
             "🏡 وضعیت اجاره کلبه‌ها"
