@@ -5,9 +5,14 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QAbstractItemView
 )
-from PySide6.QtCore import Qt
+
+from PySide6.QtCore import Qt, Signal
+
 
 class CustomerTable(QWidget):
+
+    # row, column
+    row_double_clicked = Signal(int, int)
 
     def __init__(self):
         super().__init__()
@@ -15,6 +20,14 @@ class CustomerTable(QWidget):
         layout = QVBoxLayout(self)
 
         self.table = QTableWidget()
+
+        # -----------------------------
+        # دبل کلیک روی سلول
+        # -----------------------------
+
+        self.table.cellDoubleClicked.connect(
+            self._handle_double_click
+        )
 
         # تعداد ستون ها
         self.table.setColumnCount(8)
@@ -40,18 +53,20 @@ class CustomerTable(QWidget):
 
         # همه ستون‌ها اندازه ثابت داشته باشند
         for i in range(1, 8):
-            header.setSectionResizeMode(i, QHeaderView.Fixed)
+            header.setSectionResizeMode(
+                i,
+                QHeaderView.Fixed
+            )
 
-        # فقط آخرین ستون (مدارک) فضای اضافه را پر کند
+        # فقط آخرین ستون فضای اضافه را پر کند
         header.setStretchLastSection(True)
 
-        self.table.setColumnWidth(1, 290)  # نام و نام خانوادگی
-        self.table.setColumnWidth(2, 165)  # شماره تماس
-        self.table.setColumnWidth(3, 100)  # شماره کلبه
-        self.table.setColumnWidth(4, 120)  # تاریخ ورود
-        self.table.setColumnWidth(5, 120)  # تاریخ خروج
-        self.table.setColumnWidth(6, 100)  # وضعیت
-        # برای ستون مدارک عرض تعیین نکن؛ چون خودش فضای باقی‌مانده را پر می‌کند. # مدارک
+        self.table.setColumnWidth(1, 290)
+        self.table.setColumnWidth(2, 165)
+        self.table.setColumnWidth(3, 100)
+        self.table.setColumnWidth(4, 120)
+        self.table.setColumnWidth(5, 120)
+        self.table.setColumnWidth(6, 100)
 
         # انتخاب کامل ردیف
         self.table.setSelectionBehavior(
@@ -82,3 +97,18 @@ class CustomerTable(QWidget):
 
         layout.addWidget(self.table)
 
+    # =====================================================
+    # مدیریت دبل کلیک
+    # =====================================================
+
+    def _handle_double_click(self, row, column):
+
+        # اگر روی ردیف واقعی کلیک شده باشد
+        if row < 0:
+            return
+
+        # ارسال ردیف و ستون به MainWindow
+        self.row_double_clicked.emit(
+            row,
+            column
+        )
