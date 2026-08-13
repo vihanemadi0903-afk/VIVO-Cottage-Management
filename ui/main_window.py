@@ -18,6 +18,7 @@ from ui.cottage_status_dialog import CottageStatusDialog
 from ui.settings_dialog import SettingsDialog
 from core.resource_path import resource_path
 from ui.about_dialog import AboutDialog
+from ui.reservation_calendar_dialog import ReservationCalendarDialog
 
 
 class MainWindow(QWidget):
@@ -34,6 +35,8 @@ class MainWindow(QWidget):
                 resource_path("assets/icons/logo.ico")
             )
         )
+
+        self.reservation_calendar = None
 
         self.resize(1200, 700)
 
@@ -91,6 +94,10 @@ class MainWindow(QWidget):
 
         self.customer_table.table.cellDoubleClicked.connect(
             self.table_double_clicked
+        )
+
+        self.header.calendar_clicked.connect(
+            self.open_reservation_calendar
         )
 
         # ---------- فیلترهای لحظه‌ای ----------
@@ -548,6 +555,17 @@ class MainWindow(QWidget):
         dialog = AboutDialog()
 
         dialog.exec()
+
+    def open_reservation_calendar(self):
+
+        if self.reservation_calendar is None:
+            self.reservation_calendar = ReservationCalendarDialog(
+                self
+            )
+
+        self.reservation_calendar.show()
+        self.reservation_calendar.raise_()
+        self.reservation_calendar.activateWindow()
 
 
 
