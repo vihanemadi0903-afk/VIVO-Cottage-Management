@@ -305,6 +305,51 @@ class CustomerController:
 
         return cottages
 
+    # -----------------------------
+    # دریافت رزروهای یک کلبه
+    # -----------------------------
+    def get_cottage_reservations(self, cottage_number):
+
+        customers = self.db.get_all_customers()
+
+        reservations = []
+
+        for customer in customers:
+
+            cottage = str(
+                customer["cottage_number"] or ""
+            )
+
+            if cottage != str(cottage_number):
+                continue
+
+            check_in = customer["check_in"] or ""
+            check_out = customer["check_out"] or ""
+
+            # رزرو ناقص قابل نمایش نیست
+            if not check_in or not check_out:
+                continue
+
+            reservations.append({
+                "id": customer["id"],
+                "full_name": (
+                    customer["full_name"] or ""
+                ),
+                "check_in": check_in,
+                "check_out": check_out
+            })
+
+        # مرتب‌سازی بر اساس تاریخ ورود
+        from core.date_utils import DateUtils
+
+        reservations.sort(
+            key=lambda item: item["check_in"]
+        )
+
+        return reservations
+
     def get_customers_count(self):
 
         return self.db.get_customers_count()
+
+

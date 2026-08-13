@@ -153,6 +153,37 @@ class DatabaseManager:
         )
         """)
 
+        # -------------------------------------------------
+        # ستون‌های جدید سیستم ذخیره داخلی مدارک
+        # -------------------------------------------------
+
+        cursor.execute(
+            "PRAGMA table_info(customer_files)"
+        )
+
+        existing_file_columns = {
+            row["name"]
+            for row in cursor.fetchall()
+        }
+
+        if "file_name" not in existing_file_columns:
+
+            cursor.execute(
+                """
+                ALTER TABLE customer_files
+                ADD COLUMN file_name TEXT
+                """
+            )
+
+        if "file_data" not in existing_file_columns:
+
+            cursor.execute(
+                """
+                ALTER TABLE customer_files
+                ADD COLUMN file_data BLOB
+                """
+            )
+
         columns = [
             ("pos_office", "INTEGER DEFAULT 0"),
             ("pos_cafe", "INTEGER DEFAULT 0"),
@@ -332,35 +363,81 @@ class DatabaseManager:
 
         return customer_id
 
+    def save_customer_files(self, customer_id, files):
 
-    def save_customer_files(
-            self,
-            customer_id,
-            files
-    ):
         conn = self.connect()
-
         cursor = conn.cursor()
 
-        for file in files:
-            cursor.execute(
-                """
-                INSERT INTO customer_files
-                (
-                    customer_id,
-                    file_path
-                )
-                VALUES(?,?)
-                """,
-                (
-                    customer_id,
-                    file
-                )
-            )
+        try:
 
-        conn.commit()
+            for file in files:
 
-        conn.close()
+                if not file:
+                    continue
+
+                source_path = Path(file)
+
+                # ---------------------------------------------
+                # بررسی وجود فایل اصلی
+                # ---------------------------------------------
+
+                if not source_path.exists():
+                    continue
+
+                if not source_path.is_file():
+                    continue
+
+                # ---------------------------------------------
+                # خواندن کامل فایل
+                # ---------------------------------------------
+
+                with open(
+                        source_path,
+                        "rb"
+                ) as f:
+
+                    file_data = f.read()
+
+                # ---------------------------------------------
+                # نام فایل
+                # ---------------------------------------------
+
+                file_name = source_path.name
+
+                # ---------------------------------------------
+                # ذخیره خود فایل داخل SQLite
+                # ---------------------------------------------
+
+                cursor.execute(
+                    """
+                    INSERT INTO customer_files
+                    (
+                        customer_id,
+                        file_path,
+                        file_name,
+                        file_data
+                    )
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        customer_id,
+                        "",
+                        file_name,
+                        sqlite3.Binary(file_data)
+                    )
+                )
+
+            conn.commit()
+
+        except Exception:
+
+            conn.rollback()
+
+            raise
+
+        finally:
+
+            conn.close()
 
     def delete_customer_files(self, customer_id):
 
@@ -518,6 +595,31 @@ class DatabaseManager:
 
         return [row["file_path"] for row in rows]
 
+    def get_customer_files_data(self, customer_id):
+
+        conn = self.connect()
+
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                file_name,
+                file_data
+            FROM customer_files
+            WHERE customer_id=?
+            ORDER BY id
+            """,
+            (customer_id,)
+        )
+
+        rows = cursor.fetchall()
+
+        conn.close()
+
+        return rows
+
     def customer_has_files(self, customer_id):
 
         conn = self.connect()
@@ -660,280 +762,269 @@ class DatabaseManager:
 
         return count
 
-
     def merge_backup(self, backup_path):
-        """
-        اطلاعات یک دیتابیس بکاپ را به دیتابیس فعلی VIVO اضافه می‌کند.
 
-        نکات مهم:
-        - اطلاعات فعلی حذف نمی‌شوند.
-        - IDهای دیتابیس بکاپ مستقیماً وارد دیتابیس فعلی نمی‌شوند.
-        - اطلاعات پرداخت نیز منتقل می‌شوند.
-        - مدارک هر مسافر با customer_id جدید منتقل می‌شوند.
-        - در صورت خطا، تغییرات این عملیات Rollback می‌شوند.
-        - بکاپ قدیمی‌تر که بعضی ستون‌های جدید را نداشته باشد،
-          تا حد ممکن با مقدار پیش‌فرض سازگار می‌شود.
-        """
+        backup_conn = sqlite3.connect(
+            backup_path
+        )
 
-        backup_path = Path(backup_path)
+        backup_conn.row_factory = sqlite3.Row
 
-        if not backup_path.exists():
-            raise FileNotFoundError(
-                "فایل بکاپ پیدا نشد."
-            )
+        backup_cursor = backup_conn.cursor()
 
-        if backup_path.suffix.lower() != ".db":
-            raise ValueError(
-                "فایل انتخاب شده یک دیتابیس SQLite معتبر نیست."
-            )
+        current_conn = self.connect()
 
-        # -------------------------------------------------
-        # اتصال به دیتابیس بکاپ
-        # -------------------------------------------------
-
-        backup_conn = None
-        current_conn = None
+        current_cursor = current_conn.cursor()
 
         try:
 
-            backup_conn = sqlite3.connect(
-                str(backup_path)
-            )
-
-            backup_conn.row_factory = sqlite3.Row
-
-            backup_cursor = backup_conn.cursor()
-
-            # -------------------------------------------------
-            # بررسی وجود جدول customers
-            # -------------------------------------------------
-
-            backup_cursor.execute(
-                """
-                SELECT name
-                FROM sqlite_master
-                WHERE type='table'
-                AND name='customers'
-                """
-            )
-
-            if backup_cursor.fetchone() is None:
-                raise ValueError(
-                    "فایل انتخاب شده دیتابیس VIVO معتبر نیست."
-                )
-
-            # -------------------------------------------------
-            # بررسی وجود جدول مدارک
-            # -------------------------------------------------
-
-            backup_cursor.execute(
-                """
-                SELECT name
-                FROM sqlite_master
-                WHERE type='table'
-                AND name='customer_files'
-                """
-            )
-
-            has_files_table = (
-                    backup_cursor.fetchone()
-                    is not None
-            )
-
-            # -------------------------------------------------
-            # دریافت ستون‌های موجود در بکاپ
-            # -------------------------------------------------
-
-            backup_cursor.execute(
-                "PRAGMA table_info(customers)"
-            )
-
-            backup_columns = {
-                row["name"]
-                for row in backup_cursor.fetchall()
-            }
-
-            # -------------------------------------------------
-            # اتصال به دیتابیس فعلی
-            # -------------------------------------------------
-
-            current_conn = self.connect()
-
-            current_cursor = current_conn.cursor()
-
-            # -------------------------------------------------
-            # بررسی جدول فعلی
-            # -------------------------------------------------
-
-            current_cursor.execute(
-                """
-                SELECT name
-                FROM sqlite_master
-                WHERE type='table'
-                AND name='customers'
-                """
-            )
-
-            if current_cursor.fetchone() is None:
-                raise ValueError(
-                    "جدول customers در دیتابیس فعلی وجود ندارد."
-                )
-
-            # -------------------------------------------------
-            # ستون‌های دیتابیس فعلی
-            # -------------------------------------------------
-
-            current_cursor.execute(
-                "PRAGMA table_info(customers)"
-            )
-
-            current_columns = [
-                row["name"]
-                for row in current_cursor.fetchall()
-            ]
-
-            # -------------------------------------------------
-            # ستون‌هایی که واقعاً می‌توانیم منتقل کنیم
-            # -------------------------------------------------
-
-            excluded_columns = {
-                "id"
-            }
-
-            columns_to_copy = [
-                column
-                for column in current_columns
-                if column not in excluded_columns
-                   and column in backup_columns
-            ]
-
-            if not columns_to_copy:
-                raise ValueError(
-                    "هیچ اطلاعات قابل انتقالی از بکاپ پیدا نشد."
-                )
-
-            # -------------------------------------------------
-            # دریافت تمام مسافرهای بکاپ
-            # -------------------------------------------------
+            # ==================================================
+            # دریافت مسافرهای بکاپ
+            # ==================================================
 
             backup_cursor.execute(
                 """
                 SELECT *
                 FROM customers
-                ORDER BY id
                 """
             )
 
-            customers = backup_cursor.fetchall()
+            backup_customers = (
+                backup_cursor.fetchall()
+            )
 
-            imported_customers = 0
-            imported_files = 0
+            # ==================================================
+            # بررسی ستون‌های customer_files در بکاپ
+            # ==================================================
 
-            # -------------------------------------------------
-            # انتقال مسافرها
-            # -------------------------------------------------
+            backup_cursor.execute(
+                "PRAGMA table_info(customer_files)"
+            )
 
-            for customer in customers:
+            backup_file_columns = {
+                row["name"]
+                for row in backup_cursor.fetchall()
+            }
 
-                values = []
+            has_file_name = (
+                    "file_name"
+                    in backup_file_columns
+            )
 
-                for column in columns_to_copy:
+            has_file_data = (
+                    "file_data"
+                    in backup_file_columns
+            )
 
-                    value = customer[column]
+            has_file_path = (
+                    "file_path"
+                    in backup_file_columns
+            )
 
-                    # اگر بعضی ستون‌های جدید در بکاپ قدیمی
-                    # مقدار NULL داشته باشند
-                    if value is None:
+            # ==================================================
+            # شمارنده‌ها
+            # ==================================================
 
-                        if column in {
-                            "pos_office",
-                            "pos_cafe",
-                            "pos_market",
-                            "cash",
-                            "card_transfer"
-                        }:
-                            value = 0
+            added_customers = 0
+            added_files = 0
 
-                        elif column in {
-                            "full_name",
-                            "phone",
-                            "cottage_number",
-                            "check_in",
-                            "check_in_value",
-                            "check_out",
-                            "check_out_value",
-                            "description",
-                            "card_transfer_receiver"
-                        }:
-                            value = ""
+            # ==================================================
+            # اضافه کردن مسافرها
+            # ==================================================
 
-                    values.append(value)
+            for customer in backup_customers:
 
-                placeholders = ", ".join(
-                    ["?"] * len(columns_to_copy)
-                )
+                # --------------------------------------------------
+                # بررسی اینکه ID وجود دارد
+                # --------------------------------------------------
 
-                columns_sql = ", ".join(
-                    f'"{column}"'
-                    for column in columns_to_copy
-                )
+                if "id" not in customer.keys():
+                    continue
+
+                # --------------------------------------------------
+                # بررسی وجود مسافر مشابه
+                # --------------------------------------------------
 
                 current_cursor.execute(
-                    f"""
-                    INSERT INTO customers
-                    ({columns_sql})
-                    VALUES ({placeholders})
+                    """
+                    SELECT id
+                    FROM customers
+                    WHERE
+                        full_name = ?
+                        AND phone = ?
+                        AND cottage_number = ?
+                        AND check_in = ?
+                        AND check_out = ?
+                    LIMIT 1
                     """,
-                    values
+                    (
+                        customer["full_name"],
+                        customer["phone"],
+                        customer["cottage_number"],
+                        customer["check_in"],
+                        customer["check_out"]
+                    )
                 )
 
-                # ID جدید مسافر در دیتابیس فعلی
-                new_customer_id = (
-                    current_cursor.lastrowid
+                existing_customer = (
+                    current_cursor.fetchone()
                 )
 
-                imported_customers += 1
+                # --------------------------------------------------
+                # اگر مسافر از قبل وجود داشت
+                # --------------------------------------------------
 
-                # -------------------------------------------------
-                # انتقال مدارک همین مسافر
-                # -------------------------------------------------
+                if existing_customer is not None:
 
-                if (
-                        has_files_table
-                        and "id" in backup_columns
-                ):
+                    new_customer_id = (
+                        existing_customer["id"]
+                    )
 
-                    backup_customer_id = customer["id"]
+                # --------------------------------------------------
+                # در غیر این صورت مسافر جدید ایجاد کن
+                # --------------------------------------------------
 
-                    backup_cursor.execute(
+                else:
+
+                    current_cursor.execute(
                         """
-                        SELECT file_path
-                        FROM customer_files
-                        WHERE customer_id=?
+                        INSERT INTO customers
+                        (
+                            full_name,
+                            phone,
+                            cottage_number,
+                            check_in,
+                            check_out,
+                            description,
+                            pos_office,
+                            pos_cafe,
+                            pos_market,
+                            cash,
+                            card_transfer,
+                            card_transfer_receiver
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
-                            backup_customer_id,
+                            customer["full_name"],
+                            customer["phone"],
+                            customer["cottage_number"],
+                            customer["check_in"],
+                            customer["check_out"],
+                            customer["description"],
+                            customer["pos_office"],
+                            customer["pos_cafe"],
+                            customer["pos_market"],
+                            customer["cash"],
+                            customer["card_transfer"],
+                            customer["card_transfer_receiver"]
                         )
                     )
 
-                    files = backup_cursor.fetchall()
+                    new_customer_id = (
+                        current_cursor.lastrowid
+                    )
 
-                    for file_row in files:
+                    added_customers += 1
 
-                        file_path = file_row["file_path"]
+                # ==================================================
+                # دریافت مدارک این مسافر از بکاپ
+                # ==================================================
 
-                        if not file_path:
-                            continue
+                old_customer_id = customer["id"]
 
-                        # اطمینان از وجود جدول فعلی مدارک
+                backup_cursor.execute(
+                    """
+                    SELECT *
+                    FROM customer_files
+                    WHERE customer_id = ?
+                    ORDER BY id
+                    """,
+                    (old_customer_id,)
+                )
+
+                backup_files = (
+                    backup_cursor.fetchall()
+                )
+
+                # ==================================================
+                # انتقال مدارک
+                # ==================================================
+
+                for backup_file in backup_files:
+
+                    # --------------------------------------------------
+                    # مقدارهای پیش‌فرض
+                    # --------------------------------------------------
+
+                    file_name = ""
+
+                    file_data = None
+
+                    file_path = ""
+
+                    # --------------------------------------------------
+                    # نام فایل
+                    # --------------------------------------------------
+
+                    if has_file_name:
+                        file_name = (
+                                backup_file["file_name"]
+                                or ""
+                        )
+
+                    # --------------------------------------------------
+                    # اطلاعات فایل
+                    # --------------------------------------------------
+
+                    if has_file_data:
+                        file_data = (
+                            backup_file["file_data"]
+                        )
+
+                    # --------------------------------------------------
+                    # مسیر قدیمی
+                    # --------------------------------------------------
+
+                    if has_file_path:
+                        file_path = (
+                                backup_file["file_path"]
+                                or ""
+                        )
+
+                    # --------------------------------------------------
+                    # جلوگیری از مدرک تکراری
+                    # --------------------------------------------------
+
+                    if file_data:
+
                         current_cursor.execute(
                             """
-                            INSERT INTO customer_files
+                            SELECT id
+                            FROM customer_files
+                            WHERE
+                                customer_id = ?
+                                AND file_name = ?
+                                AND file_data = ?
+                            LIMIT 1
+                            """,
                             (
-                                customer_id,
-                                file_path
+                                new_customer_id,
+                                file_name,
+                                file_data
                             )
-                            VALUES (?, ?)
+                        )
+
+                    else:
+
+                        current_cursor.execute(
+                            """
+                            SELECT id
+                            FROM customer_files
+                            WHERE
+                                customer_id = ?
+                                AND file_path = ?
+                            LIMIT 1
                             """,
                             (
                                 new_customer_id,
@@ -941,41 +1032,95 @@ class DatabaseManager:
                             )
                         )
 
-                        imported_files += 1
+                    existing_file = (
+                        current_cursor.fetchone()
+                    )
 
-            # -------------------------------------------------
+                    if existing_file is not None:
+                        continue
+
+                    # ==================================================
+                    # انتقال مدرک دارای BLOB
+                    # ==================================================
+
+                    if file_data:
+
+                        current_cursor.execute(
+                            """
+                            INSERT INTO customer_files
+                            (
+                                customer_id,
+                                file_path,
+                                file_name,
+                                file_data
+                            )
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (
+                                new_customer_id,
+                                file_path,
+                                file_name,
+                                sqlite3.Binary(
+                                    bytes(file_data)
+                                )
+                            )
+                        )
+
+                        added_files += 1
+
+                    # ==================================================
+                    # انتقال مدرک قدیمی بدون BLOB
+                    # ==================================================
+
+                    else:
+
+                        current_cursor.execute(
+                            """
+                            INSERT INTO customer_files
+                            (
+                                customer_id,
+                                file_path,
+                                file_name,
+                                file_data
+                            )
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (
+                                new_customer_id,
+                                file_path,
+                                file_name,
+                                None
+                            )
+                        )
+
+                        added_files += 1
+
+            # ==================================================
             # ثبت نهایی
-            # -------------------------------------------------
+            # ==================================================
 
             current_conn.commit()
 
+            # ==================================================
+            # نتیجه موفقیت
+            # ==================================================
+
             return {
-                "customers": imported_customers,
-                "files": imported_files
+                "success": True,
+                "customers": added_customers,
+                "files": added_files
             }
-
-        except sqlite3.DatabaseError as e:
-
-            if current_conn is not None:
-                current_conn.rollback()
-
-            raise ValueError(
-                f"خطا در خواندن یا ادغام دیتابیس بکاپ:\n{e}"
-            )
 
         except Exception:
 
-            if current_conn is not None:
-                current_conn.rollback()
+            current_conn.rollback()
 
             raise
 
         finally:
 
-            if backup_conn is not None:
-                backup_conn.close()
+            backup_conn.close()
 
-            if current_conn is not None:
-                current_conn.close()
+            current_conn.close()
 
 
