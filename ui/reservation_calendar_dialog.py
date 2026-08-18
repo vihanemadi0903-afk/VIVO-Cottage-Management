@@ -220,26 +220,6 @@ class ReservationCalendarDialog(QDialog):
         )
 
         # ==================================================
-        # دکمه امروز
-        # ==================================================
-
-        self.today_button = QPushButton(
-            "امروز"
-        )
-
-        self.today_button.setFixedHeight(
-            40
-        )
-
-        self.today_button.clicked.connect(
-            self.go_to_today
-        )
-
-        main_layout.addWidget(
-            self.today_button
-        )
-
-        # ==================================================
         # انتخاب کلبه
         # ==================================================
 
@@ -270,8 +250,15 @@ class ReservationCalendarDialog(QDialog):
                 button
             )
 
-            # 8 دکمه در هر ردیف
+            # دو ردیف ۸تایی
+            # راست به چپ:
+            # کلبه 1 در سمت راست
+            # کلبه 8 در سمت چپ
+            # کلبه 9 در سمت راست
+            # کلبه 16 در سمت چپ
+
             row = (cottage_number - 1) // 8
+
             column = 7 - (
                     (cottage_number - 1) % 8
             )
@@ -282,8 +269,31 @@ class ReservationCalendarDialog(QDialog):
                 column
             )
 
-        main_layout.addLayout(
+        # کلبه‌ها بالای تقویم
+        main_layout.insertLayout(
+            0,
             self.cottage_layout
+        )
+
+        # ==================================================
+        # دکمه امروز
+        # ==================================================
+
+        self.today_button = QPushButton(
+            "امروز"
+        )
+
+        self.today_button.setFixedHeight(
+            40
+        )
+
+        self.today_button.clicked.connect(
+            self.go_to_today
+        )
+
+        # دکمه امروز پایین تقویم
+        main_layout.addWidget(
+            self.today_button
         )
 
         # ==================================================
@@ -461,6 +471,14 @@ class ReservationCalendarDialog(QDialog):
                 is_today=is_today
             )
 
+            day_widget.reservation_double_clicked.connect(
+                self.open_edit_from_calendar
+            )
+
+            day_widget.empty_double_clicked.connect(
+                self.open_add_from_calendar
+            )
+
             # ----------------------------------------------
             # دریافت رزروهای مربوط به این روز
             # ----------------------------------------------
@@ -632,6 +650,11 @@ class ReservationCalendarDialog(QDialog):
             روزهای وسط   -> کل کارت
             روز خروج     -> نیمه چپ کارت
 
+        منطق رنگ:
+            سبز  -> ورود یا خروج در امروز
+            قرمز -> رزرو کاملاً تمام شده
+            زرد  -> رزرو مربوط به آینده
+
         توجه:
             این منطق فقط برای نمایش تقویم است
             و منطق اشغال واقعی کلبه را تغییر نمی‌دهد.
@@ -643,41 +666,19 @@ class ReservationCalendarDialog(QDialog):
             day
         )
 
-        reservations = []
+        # ==================================================
+        # تاریخ امروز
+        # ==================================================
 
-        # ==================================================
-        # 20 رنگ مختلف رزرو
-        # ==================================================
-        colors = [
-            "#3B82F6",  # 01 - آبی
-            "#c60d0d",  # 02 - بنفش
-            "#3e1d59",  # 03 - سبز زمردی
-            "#68ce46",  # 04 - کهربایی
-            "#b04ed0",  # 05 - قرمز
-            "#FF69B4",  # 06 - صورتی
-            "#06B6D4",  # 07 - فیروزه‌ای
-            "#6366F1",  # 08 - نیلی
-            "#14B8A6",  # 09 - سبز فیروزه‌ای
-            "#F97316",  # 10 - نارنجی
-            "#A855F7",  # 11 - ارغوانی
-            "#22C55E",  # 12 - سبز
-            "#0EA5E9",  # 13 - آبی روشن
-            "#E11D48",  # 14 - سرخابی تیره
-            "#84CC16",  # 15 - سبز لیمویی
-            "#D946EF",  # 16 - بنفش صورتی
-            "#F43F5E",  # 17 - رز
-            "#0D9488",  # 18 - سبز دریایی
-            "#CA8A04",  # 19 - طلایی
-            "#7C3AED",  # 20 - بنفش عمیق
-        ]
+        today = jdatetime.date.today()
+
+        reservations = []
 
         # ==================================================
         # بررسی تمام رزروهای کلبه انتخاب‌شده
         # ==================================================
 
-        for index, reservation in enumerate(
-                self.cottage_reservations
-        ):
+        for reservation in self.cottage_reservations:
 
             check_in = reservation.get(
                 "check_in",
@@ -754,6 +755,49 @@ class ReservationCalendarDialog(QDialog):
                 position = "full"
 
             # ==================================================
+            # تعیین رنگ رزرو بر اساس امروز
+            # ==================================================
+
+            # ----------------------------------------------
+            # 1. سبز:
+            # ورود امروز یا خروج امروز
+            # ----------------------------------------------
+
+            if (
+                    start_date == today
+                    or
+                    end_date == today
+            ):
+
+                color = "#22C55E"
+
+            # ----------------------------------------------
+            # 2. قرمز:
+            # رزرو کاملاً تمام شده
+            # ----------------------------------------------
+
+            elif end_date < today:
+
+                color = "#EF4444"
+
+            # ----------------------------------------------
+            # 3. زرد:
+            # رزرو هنوز شروع نشده
+            # ----------------------------------------------
+
+            elif start_date > today:
+
+                color = "#F59E0B"
+
+            # ----------------------------------------------
+            # حالت پیش‌فرض
+            # ----------------------------------------------
+
+            else:
+
+                color = "#F59E0B"
+
+            # ==================================================
             # ساخت اطلاعات رزرو
             # ==================================================
 
@@ -772,14 +816,87 @@ class ReservationCalendarDialog(QDialog):
 
                 "check_out": check_out,
 
-                # رنگ اختصاصی این رزرو
-                "color": colors[
-                    index % len(colors)
-                    ],
+                "color": color,
 
                 "position": position
             })
 
         return reservations
+
+    def open_edit_from_calendar(self, reservation):
+
+        customer_id = reservation.get("id")
+
+        if not customer_id:
+            return
+
+        # دریافت اطلاعات کامل مسافر
+        customer = self.customer_controller.get_customer(
+            customer_id
+        )
+
+        if customer is None:
+            return
+
+        from ui.edit_customer_dialog import EditCustomerDialog
+
+        dialog = EditCustomerDialog(
+            customer
+        )
+
+        if dialog.exec():
+            # بعد از ویرایش، تقویم دوباره به‌روز شود
+            self.update_calendar()
+
+    def open_add_from_calendar(self, day):
+
+        from ui.add_customer_dialog import AddCustomerDialog
+
+        # ---------------------------------------------
+        # ساخت تاریخ انتخاب‌شده
+        # ---------------------------------------------
+
+        check_in = (
+            f"{self.year:04d}/"
+            f"{self.month:02d}/"
+            f"{day:02d}"
+        )
+
+        # ---------------------------------------------
+        # باز کردن پنجره ثبت
+        # ---------------------------------------------
+
+        dialog = AddCustomerDialog()
+
+        # ---------------------------------------------
+        # تاریخ ورود خودکار
+        # ---------------------------------------------
+
+        dialog.form.entry_button.setText(
+            check_in
+        )
+
+        # ---------------------------------------------
+        # اگر کلبه‌ای انتخاب شده باشد
+        # شماره کلبه هم خودکار تنظیم شود
+        # ---------------------------------------------
+
+        if self.selected_cottage is not None:
+            cottage = str(
+                self.selected_cottage
+            )
+
+            dialog.form.selected_cottage = cottage
+
+            dialog.form.cottage_button.setText(
+                f"🏠 کلبه {cottage}"
+            )
+
+        # ---------------------------------------------
+        # نمایش پنجره ثبت
+        # ---------------------------------------------
+
+        if dialog.exec():
+            self.update_calendar()
 
 

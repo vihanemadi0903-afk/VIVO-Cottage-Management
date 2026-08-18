@@ -5,13 +5,15 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QComboBox,
     QListWidget,
+    QListWidgetItem,
     QPushButton,
     QGridLayout,
     QHBoxLayout,
     QVBoxLayout,
     QFileDialog,
     QGroupBox,
-    QFrame
+    QFrame,
+    QMessageBox
 )
 import os
 import jdatetime
@@ -23,6 +25,10 @@ from PySide6.QtGui import QFont
 from ui.cottage_selection_dialog import CottageSelectionDialog
 from PySide6.QtCore import QPropertyAnimation, QEasingCurve
 from PySide6.QtCore import QPoint
+import tempfile
+from pathlib import Path
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
 
 
 class CustomerForm(QWidget):
@@ -33,6 +39,12 @@ class CustomerForm(QWidget):
         self.customer_id = None
 
         self.selected_files = []
+
+        self.existing_files = []
+
+        self.deleted_file_ids = []
+
+        self.files_changed = False
 
         self.edit_mode = False
 
@@ -353,12 +365,32 @@ class CustomerForm(QWidget):
 
         self.receiver_edit = QLineEdit()
 
+        # ---------- نسیه ----------
+
+        lbl_credit = QLabel("نسیه")
+
+        self.credit_edit = QLineEdit()
+
+        payment_layout.addWidget(
+            lbl_credit,
+            6,
+            1
+        )
+
+        payment_layout.addWidget(
+            self.credit_edit,
+            6,
+            0
+        )
+
+
         payment_fields = [
             self.pos_office_edit,
             self.pos_cafe_edit,
             self.pos_market_edit,
             self.cash_edit,
-            self.card_edit
+            self.card_edit,
+            self.credit_edit
         ]
 
         for field in payment_fields:
@@ -377,7 +409,6 @@ class CustomerForm(QWidget):
             5,
             0
         )
-
         # ---------- خط جداکننده ----------
 
         line = QFrame()
@@ -388,7 +419,7 @@ class CustomerForm(QWidget):
 
         payment_layout.addWidget(
             line,
-            6,
+            7,
             0,
             1,
             2
@@ -417,13 +448,13 @@ class CustomerForm(QWidget):
 
         payment_layout.addWidget(
             lbl_total,
-            7,
+            8,
             1
         )
 
         payment_layout.addWidget(
             self.total_label,
-            7,
+            8,
             0
         )
 
@@ -447,6 +478,10 @@ class CustomerForm(QWidget):
             self.remove_file
         )
 
+        self.files_list.itemDoubleClicked.connect(
+            self.open_file
+        )
+
     # --------------------------------------------
 
     def add_files(self):
@@ -456,61 +491,146 @@ class CustomerForm(QWidget):
             "انتخاب مدارک"
         )
 
-        for file in files:
+        if not files:
+            return
 
-            if file not in self.selected_files:
-                self.selected_files.append(file)
+        for file_path in files:
 
-                self.files_list.addItem(
-                    os.path.basename(file)
-                )
+            if file_path in self.selected_files:
+                continue
+
+            self.selected_files.append(
+                file_path
+            )
+
+            item = QListWidgetItem(
+                os.path.basename(file_path)
+            )
+
+            item.setData(
+                Qt.UserRole,
+                {
+                    "type": "new",
+                    "path": file_path
+                }
+            )
+
+            self.files_list.addItem(
+                item
+            )
+
+        self.files_changed = True
     # --------------------------------------------
 
     def remove_file(self):
 
         row = self.files_list.currentRow()
 
-        if row >= 0:
+        if row < 0:
+            return
 
-            self.selected_files.pop(row)
+        item = self.files_list.item(row)
+
+        if item is None:
+            return
+
+        file_info = item.data(Qt.UserRole)
+
+        if not file_info:
+            return
+
+        # -------------------------------
+        # مدرک جدید
+        # -------------------------------
+
+        if file_info.get("type") == "new":
+
+            file_path = file_info.get("path")
+
+            if file_path in self.selected_files:
+                self.selected_files.remove(file_path)
 
             self.files_list.takeItem(row)
 
+            self.files_changed = True
+
+            return
+
+        # -------------------------------
+        # مدرک قبلی دیتابیس
+        # -------------------------------
+
+        if file_info.get("type") == "existing":
+
+            file_id = file_info.get("id")
+
+            if file_id is not None:
+
+                if file_id not in self.deleted_file_ids:
+                    self.deleted_file_ids.append(file_id)
+
+            self.files_list.takeItem(row)
+
+            self.files_changed = True
     # --------------------------------------------
 
     def get_data(self):
 
         return {
 
-            "name": self.name_edit.text(),
+            "name":
+                self.name_edit.text(),
 
-            "phone": self.phone_edit.text(),
+            "phone":
+                self.phone_edit.text(),
 
-            "cottage": self.selected_cottage,
+            "cottage":
+                self.selected_cottage,
 
-            "entry": self.entry_button.text(),
+            "entry":
+                self.entry_button.text(),
 
-            "exit": self.exit_button.text(),
+            "exit":
+                self.exit_button.text(),
 
-            "description": self.desc_edit.toPlainText(),
+            "description":
+                self.desc_edit.toPlainText(),
 
-            "files": self.selected_files,
+            # فقط فایل‌های جدید
+            "files":
+                self.selected_files.copy(),
+
+            "files_changed":
+                self.files_changed,
+
+            # شناسه مدارک قبلی که حذف شده‌اند
+            "deleted_file_ids":
+                self.deleted_file_ids.copy(),
 
             # -------------------------
-            # اطلاعات پرداخت
+            # پرداخت
             # -------------------------
 
-            "pos_office": self.pos_office_edit.text(),
+            "pos_office":
+                self.pos_office_edit.text(),
 
-            "pos_cafe": self.pos_cafe_edit.text(),
+            "pos_cafe":
+                self.pos_cafe_edit.text(),
 
-            "pos_market": self.pos_market_edit.text(),
+            "pos_market":
+                self.pos_market_edit.text(),
 
-            "cash": self.cash_edit.text(),
+            "cash":
+                self.cash_edit.text(),
 
-            "card_transfer": self.card_edit.text(),
+            "card_transfer":
+                self.card_edit.text(),
 
-            "card_transfer_receiver": self.receiver_edit.text()
+            "card_transfer_receiver":
+                self.receiver_edit.text(),
+
+            "credit":
+                self.credit_edit.text()
         }
     # --------------------------------------------
 
@@ -540,20 +660,28 @@ class CustomerForm(QWidget):
 
         self.files_list.clearSelection()
 
+        self.credit_edit.clear()
+
+        self.update_total_payment()
+
     def set_data(self, data):
 
         self.customer_id = data["id"]
 
+        # =====================================================
+        # اطلاعات مسافر
+        # =====================================================
+
         self.name_edit.setText(
-            data["full_name"] or ""
+            data.get("full_name") or ""
         )
 
         self.phone_edit.setText(
-            data["phone"] or ""
+            data.get("phone") or ""
         )
 
         cottage = str(
-            data["cottage_number"] or ""
+            data.get("cottage_number") or ""
         ).strip()
 
         self.selected_cottage = (
@@ -570,15 +698,15 @@ class CustomerForm(QWidget):
             )
 
         self.entry_button.setText(
-            data["check_in"] or ""
+            data.get("check_in") or ""
         )
 
         self.exit_button.setText(
-            data["check_out"] or ""
+            data.get("check_out") or ""
         )
 
         self.desc_edit.setPlainText(
-            data["description"] or ""
+            data.get("description") or ""
         )
 
         # =====================================================
@@ -609,22 +737,116 @@ class CustomerForm(QWidget):
             data.get("card_transfer_receiver") or ""
         )
 
+        self.credit_edit.setText(
+            str(data.get("credit") or "")
+        )
+
         # =====================================================
-        # فایل‌ها
+        # مدارک
         # =====================================================
 
         self.selected_files.clear()
 
+        self.existing_files.clear()
+
+        self.deleted_file_ids.clear()
+
         self.files_list.clear()
 
-        if "files" in data.keys():
+        self.files_changed = False
 
-            for file in data["files"]:
-                self.selected_files.append(file)
+        files = data.get("files") or []
+
+        for file in files:
+
+            # -----------------------------------------
+            # مدرک ذخیره شده در دیتابیس
+            # -----------------------------------------
+
+            if isinstance(file, dict):
+
+                file_id = file.get("id")
+
+                file_name = (
+                        file.get("file_name")
+                        or "مدرک بدون نام"
+                )
+
+                file_data = file.get(
+                    "file_data"
+                )
+
+                file_path = (
+                        file.get("file_path")
+                        or ""
+                )
+
+                file_info = {
+
+                    "id": file_id,
+
+                    "file_name": file_name,
+
+                    "file_data": file_data,
+
+                    "file_path": file_path
+                }
+
+                self.existing_files.append(
+                    file_info
+                )
+
+                # آیتم لیست
+                item = QListWidgetItem(
+                    file_name
+                )
+
+                # اطلاعات واقعی فایل
+                item.setData(
+                    Qt.UserRole,
+                    {
+                        "type": "existing",
+                        "id": file_id
+                    }
+                )
 
                 self.files_list.addItem(
-                    os.path.basename(file)
+                    item
                 )
+
+            # -----------------------------------------
+            # فایل جدید
+            # -----------------------------------------
+
+            else:
+
+                file_path = str(file)
+
+                self.selected_files.append(
+                    file_path
+                )
+
+                item = QListWidgetItem(
+                    os.path.basename(file_path)
+                )
+
+                item.setData(
+                    Qt.UserRole,
+                    {
+                        "type": "new",
+                        "path": file_path
+                    }
+                )
+
+                self.files_list.addItem(
+                    item
+                )
+
+        # =====================================================
+        # جمع پرداخت
+        # =====================================================
+
+        self.update_total_payment()
 
 
     def set_files(self, files):
@@ -760,16 +982,8 @@ class CustomerForm(QWidget):
                 f"🏠 کلبه {cottage}"
             )
 
-            # فقط در حالت ثبت، اطلاعات مسافر
-            # بعد از انتخاب کلبه نمایان شوند
-            if not getattr(
-                    self,
-                    "is_edit_mode",
-                    False
-            ):
+            if not self.edit_mode:
                 self.show_customer_fields()
-
-
 
     def show_customer_fields(self):
 
@@ -1017,6 +1231,124 @@ class CustomerForm(QWidget):
         self.entry_button.setVisible(True)
         self.exit_button.setVisible(True)
         self.cottage_button.setVisible(True)
+
+    def open_file(self, item):
+
+        if item is None:
+            return
+
+        file_info = item.data(
+            Qt.UserRole
+        )
+
+        if not file_info:
+            return
+
+        # =====================================================
+        # فایل جدید
+        # =====================================================
+
+        if file_info.get("type") == "new":
+
+            file_path = file_info.get(
+                "path"
+            )
+
+            if not file_path:
+                return
+
+            if not os.path.exists(file_path):
+                QMessageBox.warning(
+                    self,
+                    "خطا",
+                    "فایل موردنظر پیدا نشد."
+                )
+
+                return
+
+            QDesktopServices.openUrl(
+                QUrl.fromLocalFile(
+                    file_path
+                )
+            )
+
+            return
+
+        # =====================================================
+        # فایل قبلی دیتابیس
+        # =====================================================
+
+        if file_info.get("type") == "existing":
+
+            file_id = file_info.get(
+                "id"
+            )
+
+            file_data = None
+            file_name = "document"
+
+            # پیدا کردن فایل از existing_files
+            for file in self.existing_files:
+
+                if file.get("id") == file_id:
+                    file_data = file.get(
+                        "file_data"
+                    )
+
+                    file_name = (
+                            file.get("file_name")
+                            or "document"
+                    )
+
+                    break
+
+            if not file_data:
+                QMessageBox.warning(
+                    self,
+                    "خطا",
+                    "اطلاعات فایل در دیتابیس پیدا نشد."
+                )
+
+                return
+
+            try:
+
+                # پسوند فایل
+                suffix = Path(
+                    file_name
+                ).suffix
+
+                if not suffix:
+                    suffix = ".bin"
+
+                # ساخت فایل موقت
+                temp_file = tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=suffix
+                )
+
+                temp_path = temp_file.name
+
+                temp_file.write(
+                    bytes(file_data)
+                )
+
+                temp_file.close()
+
+                # باز کردن با برنامه پیش‌فرض ویندوز
+                QDesktopServices.openUrl(
+                    QUrl.fromLocalFile(
+                        temp_path
+                    )
+                )
+
+            except Exception as e:
+
+                QMessageBox.critical(
+                    self,
+                    "خطا",
+                    f"باز کردن فایل انجام نشد:\n{e}"
+                )
 
 
 

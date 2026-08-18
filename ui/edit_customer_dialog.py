@@ -32,9 +32,6 @@ class EditCustomerDialog(QDialog):
 
         layout.addWidget(self.form)
 
-        # نمایش اطلاعات فعلی
-        self.form.set_data(customer)
-
         buttons = QHBoxLayout()
 
         self.save_btn = QPushButton("ذخیره تغییرات")

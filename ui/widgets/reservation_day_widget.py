@@ -6,36 +6,11 @@ from PySide6.QtGui import (
     QPen,
 )
 from PySide6.QtWidgets import QWidget
-
+from PySide6.QtCore import Signal
 
 class ReservationDayWidget(QWidget):
-
-    # ==================================================
-    # رنگ‌های رزرو
-    # ==================================================
-
-    RESERVATION_COLORS = [
-        "#3B82F6",  # 01 - آبی
-        "#8B5CF6",  # 02 - بنفش
-        "#10B981",  # 03 - سبز زمردی
-        "#F59E0B",  # 04 - کهربایی
-        "#EF4444",  # 05 - قرمز
-        "#EC4899",  # 06 - صورتی
-        "#06B6D4",  # 07 - فیروزه‌ای
-        "#6366F1",  # 08 - نیلی
-        "#14B8A6",  # 09 - سبز فیروزه‌ای
-        "#F97316",  # 10 - نارنجی
-        "#A855F7",  # 11 - ارغوانی
-        "#22C55E",  # 12 - سبز
-        "#0EA5E9",  # 13 - آبی روشن
-        "#E11D48",  # 14 - سرخابی تیره
-        "#84CC16",  # 15 - سبز لیمویی
-        "#D946EF",  # 16 - بنفش صورتی
-        "#F43F5E",  # 17 - رز
-        "#0D9488",  # 18 - سبز دریایی
-        "#CA8A04",  # 19 - طلایی
-        "#7C3AED",  # 20 - بنفش عمیق
-    ]
+    reservation_double_clicked = Signal(object)
+    empty_double_clicked = Signal(int)
 
     def __init__(
         self,
@@ -59,6 +34,7 @@ class ReservationDayWidget(QWidget):
         self.setCursor(
             Qt.PointingHandCursor
         )
+        self.setMouseTracking(True)
 
     # ==================================================
     # دریافت رنگ بر اساس شماره رزرو
@@ -513,3 +489,123 @@ class ReservationDayWidget(QWidget):
         super().leaveEvent(
             event
         )
+
+
+    def mouseDoubleClickEvent(self, event):
+
+        # ============================================
+        # مختصات کلیک
+        # ============================================
+
+        click_x = event.position().x()
+
+        middle_x = self.width() / 2
+
+        # ============================================
+        # اگر هیچ رزروی وجود ندارد
+        # ============================================
+
+        if not self.reservations:
+            self.empty_double_clicked.emit(
+                self.day
+            )
+
+            event.accept()
+            return
+
+        # ============================================
+        # پیدا کردن رزروهای نیمه چپ و راست
+        # ============================================
+
+        left_reservation = None
+        right_reservation = None
+        full_reservation = None
+
+        for reservation in self.reservations:
+
+            position = reservation.get(
+                "position",
+                "full"
+            )
+
+            # -----------------------------
+            # رزرو کل روز
+            # -----------------------------
+
+            if position == "full":
+
+                full_reservation = reservation
+
+            # -----------------------------
+            # نیمه چپ = روز خروج
+            # -----------------------------
+
+            elif position == "end":
+
+                left_reservation = reservation
+
+            # -----------------------------
+            # نیمه راست = روز ورود
+            # -----------------------------
+
+            elif position == "start":
+
+                right_reservation = reservation
+
+        # ============================================
+        # اگر کل روز رزرو شده
+        # ============================================
+
+        if full_reservation is not None:
+            self.reservation_double_clicked.emit(
+                full_reservation
+            )
+
+            event.accept()
+            return
+
+        # ============================================
+        # تشخیص نیمه‌ای که کاربر کلیک کرده
+        # ============================================
+
+        if click_x < middle_x:
+
+            # ========================================
+            # نیمه چپ
+            # ========================================
+
+            if left_reservation is not None:
+
+                # این قسمت رزرو شده
+                self.reservation_double_clicked.emit(
+                    left_reservation
+                )
+
+            else:
+
+                # این قسمت آزاد است
+                self.empty_double_clicked.emit(
+                    self.day
+                )
+
+        else:
+
+            # ========================================
+            # نیمه راست
+            # ========================================
+
+            if right_reservation is not None:
+
+                # این قسمت رزرو شده
+                self.reservation_double_clicked.emit(
+                    right_reservation
+                )
+
+            else:
+
+                # این قسمت آزاد است
+                self.empty_double_clicked.emit(
+                    self.day
+                )
+
+        event.accept()
