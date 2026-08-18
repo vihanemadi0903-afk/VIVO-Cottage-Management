@@ -120,21 +120,22 @@ class DatabaseManager:
 
             check_out_value INTEGER,
 
-            description TEXT
-            
+            description TEXT,
+
             pos_office INTEGER DEFAULT 0,
-            
+
             pos_cafe INTEGER DEFAULT 0,
-            
+
             pos_market INTEGER DEFAULT 0,
-            
+
             cash INTEGER DEFAULT 0,
-            
+
             card_transfer INTEGER DEFAULT 0,
-            
-            card_transfer_receiver TEXT DEFAULT 
-            
-            "")
+
+            card_transfer_receiver TEXT DEFAULT '',
+
+            credit INTEGER DEFAULT 0
+            )
         """)
 
         cursor.execute("""
@@ -190,7 +191,8 @@ class DatabaseManager:
             ("pos_market", "INTEGER DEFAULT 0"),
             ("cash", "INTEGER DEFAULT 0"),
             ("card_transfer", "INTEGER DEFAULT 0"),
-            ("card_transfer_receiver", "TEXT DEFAULT ''")
+            ("card_transfer_receiver", "TEXT DEFAULT ''"),
+            ("credit", "INTEGER DEFAULT 0")
         ]
 
         cursor.execute("PRAGMA table_info(customers)")
@@ -284,7 +286,8 @@ class DatabaseManager:
             pos_market=0,
             cash=0,
             card_transfer=0,
-            card_transfer_receiver=""
+            card_transfer_receiver="",
+            credit=0
     ):
 
         if not self.validate_phone(phone):
@@ -336,9 +339,10 @@ class DatabaseManager:
                 pos_market,
                 cash,
                 card_transfer,
-                card_transfer_receiver
+                card_transfer_receiver,
+                credit
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 full_name,
@@ -352,7 +356,8 @@ class DatabaseManager:
                 pos_market,
                 cash,
                 card_transfer,
-                card_transfer_receiver
+                card_transfer_receiver,
+                credit
             )
         )
 
@@ -485,74 +490,68 @@ class DatabaseManager:
             check_in,
             check_out,
             description,
-            files,
             pos_office=0,
             pos_cafe=0,
             pos_market=0,
             cash=0,
             card_transfer=0,
-            card_transfer_receiver=""
+            card_transfer_receiver="",
+            credit=0
     ):
 
         conn = self.connect()
         cursor = conn.cursor()
 
-        # -----------------------------
-        # به‌روزرسانی اطلاعات مسافر
-        # -----------------------------
+        try:
 
-        cursor.execute(
-            """
-            UPDATE customers
-            SET
-                full_name = ?,
-                phone = ?,
-                cottage_number = ?,
-                check_in = ?,
-                check_out = ?,
-                description = ?,
-                pos_office = ?,
-                pos_cafe = ?,
-                pos_market = ?,
-                cash = ?,
-                card_transfer = ?,
-                card_transfer_receiver = ?
-            WHERE id = ?
-            """,
-            (
-                full_name,
-                phone,
-                cottage,
-                check_in,
-                check_out,
-                description,
-                pos_office,
-                pos_cafe,
-                pos_market,
-                cash,
-                card_transfer,
-                card_transfer_receiver,
-                customer_id
-            )
-        )
-
-        conn.commit()
-        conn.close()
-
-        # -----------------------------
-        # به‌روزرسانی مدارک
-        # -----------------------------
-
-        self.delete_customer_files(
-            customer_id
-        )
-
-        if files:
-            self.save_customer_files(
-                customer_id,
-                files
+            cursor.execute(
+                """
+                UPDATE customers
+                SET
+                    full_name = ?,
+                    phone = ?,
+                    cottage_number = ?,
+                    check_in = ?,
+                    check_out = ?,
+                    description = ?,
+                    pos_office = ?,
+                    pos_cafe = ?,
+                    pos_market = ?,
+                    cash = ?,
+                    card_transfer = ?,
+                    card_transfer_receiver = ?,
+                    credit = ?
+                WHERE id = ?
+                """,
+                (
+                    full_name,
+                    phone,
+                    cottage,
+                    check_in,
+                    check_out,
+                    description,
+                    pos_office,
+                    pos_cafe,
+                    pos_market,
+                    cash,
+                    card_transfer,
+                    card_transfer_receiver,
+                    credit,
+                    customer_id
+                )
             )
 
+            conn.commit()
+
+        except Exception:
+
+            conn.rollback()
+
+            raise
+
+        finally:
+
+            conn.close()
 
     def delete_customer(self, customer_id):
 
@@ -598,7 +597,6 @@ class DatabaseManager:
     def get_customer_files_data(self, customer_id):
 
         conn = self.connect()
-
         cursor = conn.cursor()
 
         cursor.execute(
@@ -606,7 +604,8 @@ class DatabaseManager:
             SELECT
                 id,
                 file_name,
-                file_data
+                file_data,
+                file_path
             FROM customer_files
             WHERE customer_id=?
             ORDER BY id
@@ -618,7 +617,16 @@ class DatabaseManager:
 
         conn.close()
 
-        return rows
+        # sqlite3.Row را به dict تبدیل می‌کنیم
+        return [
+            {
+                "id": row["id"],
+                "file_name": row["file_name"] or "",
+                "file_data": row["file_data"],
+                "file_path": row["file_path"] or ""
+            }
+            for row in rows
+        ]
 
     def customer_has_files(self, customer_id):
 
@@ -886,6 +894,17 @@ class DatabaseManager:
 
                 else:
 
+                    # --------------------------------------------------
+                    # اطلاعات نسیه
+                    # --------------------------------------------------
+                    # بکاپ‌های قدیمی ممکن است ستون credit نداشته باشند.
+                    # در این حالت مقدار نسیه صفر در نظر گرفته می‌شود.
+
+                    credit = 0
+
+                    if "credit" in customer.keys():
+                        credit = customer["credit"] or 0
+
                     current_cursor.execute(
                         """
                         INSERT INTO customers
@@ -901,9 +920,10 @@ class DatabaseManager:
                             pos_market,
                             cash,
                             card_transfer,
-                            card_transfer_receiver
+                            card_transfer_receiver,
+                            credit
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             customer["full_name"],
@@ -917,7 +937,8 @@ class DatabaseManager:
                             customer["pos_market"],
                             customer["cash"],
                             customer["card_transfer"],
-                            customer["card_transfer_receiver"]
+                            customer["card_transfer_receiver"],
+                            credit
                         )
                     )
 
@@ -1122,5 +1143,35 @@ class DatabaseManager:
             backup_conn.close()
 
             current_conn.close()
+
+    def delete_customer_file(self, customer_id, file_id):
+
+        conn = self.connect()
+        cursor = conn.cursor()
+
+        try:
+
+            cursor.execute(
+                """
+                DELETE FROM customer_files
+                WHERE id = ?
+                AND customer_id = ?
+                """,
+                (
+                    file_id,
+                    customer_id
+                )
+            )
+
+            conn.commit()
+
+        except Exception:
+
+            conn.rollback()
+            raise
+
+        finally:
+
+            conn.close()
 
 

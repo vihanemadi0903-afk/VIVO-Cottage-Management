@@ -122,7 +122,7 @@ class SettingsDialog(QDialog):
 
         info_layout = QVBoxLayout()
 
-        self.version_label = QLabel("نسخه: VIVO 4.0.1")
+        self.version_label = QLabel("نسخه: VIVO 5.0.1")
 
         self.database_label = QLabel("دیتابیس: SQLite")
 

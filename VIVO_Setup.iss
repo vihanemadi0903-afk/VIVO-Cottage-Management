@@ -1,5 +1,5 @@
 #define MyAppName "VIVO"
-#define MyAppVersion "3.0.2"
+#define MyAppVersion "5.0.1"
 #define MyAppPublisher "VIVO"
 #define MyAppExeName "VIVO.exe"
 
@@ -14,7 +14,7 @@ DefaultDirName={autopf}\VIVO
 DefaultGroupName=VIVO
 
 OutputDir=installer
-OutputBaseFilename=VIVO_Setup_3.0.2
+OutputBaseFilename=VIVO_Setup_5.0.1
 
 Compression=lzma
 SolidCompression=yes
@@ -30,38 +30,41 @@ DisableProgramGroupPage=yes
 
 [Tasks]
 Name: "desktopicon"; \
-    Description: "ایجاد میانبر روی دسکتاپ"; \
-    GroupDescription: "میانبرها:"; \
+    Description: "Create a desktop shortcut"; \
+    GroupDescription: "Additional shortcuts:"; \
     Flags: unchecked
 
 [Files]
 
+; Main application
 Source: "dist\VIVO.exe"; \
     DestDir: "{app}"; \
     Flags: ignoreversion
 
+; Application assets and icons
 Source: "assets\*"; \
     DestDir: "{app}\assets"; \
     Flags: ignoreversion recursesubdirs createallsubdirs
 
+; Initial database
 Source: "data\vivo.db"; \
     DestDir: "{app}\data"; \
-    Flags: ignoreversion
-
+    Flags: ignoreversion onlyifdoesntexist
 
 [Dirs]
 
+; Application data directory
 Name: "{app}\data"
 
 [Icons]
 
-; میانبر Start Menu
+; Start Menu shortcut
 Name: "{group}\VIVO"; \
     Filename: "{app}\VIVO.exe"; \
     WorkingDir: "{app}"; \
     IconFilename: "{app}\assets\icons\logo.ico"
 
-; میانبر Desktop
+; Desktop shortcut
 Name: "{autodesktop}\VIVO"; \
     Filename: "{app}\VIVO.exe"; \
     WorkingDir: "{app}"; \
@@ -71,13 +74,12 @@ Name: "{autodesktop}\VIVO"; \
 [Run]
 
 Filename: "{app}\VIVO.exe"; \
-    Description: "اجرای VIVO"; \
+    Description: "Launch VIVO"; \
     WorkingDir: "{app}"; \
     Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 
-; فقط فایل‌های نصب‌شده حذف شوند.
-; دیتابیس و اطلاعات کاربر عمداً حذف نمی‌شوند.
+; Remove only installed application files.
+; User database and personal data are intentionally preserved.
 Type: filesandordirs; Name: "{app}"
-
